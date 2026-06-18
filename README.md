@@ -502,7 +502,7 @@ This project is distributed under the **MIT License**.
 ```
 MIT License
 
-Copyright (c) 2026 Mohamed Bouazza
+Copyright (c) 2026 Mohamed Ayman El Kajdouhi
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -531,7 +531,7 @@ See the [LICENSE](LICENSE) file for full details.
 
 <div align="center">
 
-**Mohamed Bouazza**
+**Mohamed Ayman El Kajdouhi**
 
 *Master's Student — Artificial Intelligence and IoT*
 
