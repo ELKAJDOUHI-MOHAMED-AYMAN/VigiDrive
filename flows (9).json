@@ -1,0 +1,263 @@
+[
+    {
+        "id": "30953abc540a456a",
+        "type": "tab",
+        "label": "Fusion VigiDrive"
+    },
+    {
+        "id": "3149185a1ed8ba75",
+        "type": "mqtt in",
+        "z": "30953abc540a456a",
+        "name": "Camera Alertes",
+        "topic": "vigidrive/alertes",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "broker-local",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 150,
+        "y": 100,
+        "wires": [
+            [
+                "489ee865a2b55434"
+            ]
+        ]
+    },
+    {
+        "id": "d900564897b89870",
+        "type": "mqtt in",
+        "z": "30953abc540a456a",
+        "name": "MPU Tilt",
+        "topic": "vigidrive/tilt",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "broker-local",
+        "inputs": 0,
+        "x": 150,
+        "y": 220,
+        "wires": [
+            [
+                "489ee865a2b55434"
+            ]
+        ]
+    },
+    {
+        "id": "489ee865a2b55434",
+        "type": "function",
+        "z": "30953abc540a456a",
+        "name": "🧠 Fusion Logic",
+        "func": "var topic = msg.topic;\nvar d = msg.payload;\n\n// Stocke l'état de chaque source\nif (topic === 'vigidrive/alertes') {\n    var n = d.niveau || 0;\n    if (n >= 3) global.set('cam_etat', 'DANGER');\n    else if (n >= 2) global.set('cam_etat', 'FATIGUE');\n    else if (n >= 1) global.set('cam_etat', 'WARNING');\n    else global.set('cam_etat', 'NORMAL');\n    global.set('cam_niveau', n);\n    global.set('cam_perclos', d.PERCLOS || 0);\n    global.set('cam_type', d.type || '');\n}\n\nif (topic === 'vigidrive/tilt') {\n    var tn = d.niveau || 0;\n    if (tn >= 3) global.set('mpu_etat', 'DANGER');\n    else if (tn >= 2) global.set('mpu_etat', 'WARNING');\n    else if (tn >= 1) global.set('mpu_etat', 'WARNING');\n    else global.set('mpu_etat', 'NORMAL');\n    global.set('mpu_niveau', tn);\n    global.set('mpu_tilt', d.tilt || 0);\n}\n\n// Lecture états actuels\nvar cam = global.get('cam_etat') || 'NORMAL';\nvar mpu = global.get('mpu_etat') || 'NORMAL';\nvar cam_n = global.get('cam_niveau') || 0;\nvar mpu_n = global.get('mpu_niveau') || 0;\n\n// TABLE DE FUSION\nvar niveau_final, etat_final, couleur;\n\nif (cam === 'DANGER' && mpu === 'DANGER') {\n    niveau_final = 4;\n    etat_final   = 'CRITIQUE';\n    couleur      = 'rouge_clignotant';\n}\nelse if (cam === 'DANGER' || mpu === 'DANGER') {\n    niveau_final = 3;\n    etat_final   = 'DANGER';\n    couleur      = 'rouge';\n}\nelse if (cam === 'FATIGUE' || mpu === 'WARNING') {\n    niveau_final = 2;\n    etat_final   = 'FATIGUE';\n    couleur      = 'orange';\n}\nelse if (cam === 'WARNING' || mpu === 'WARNING') {\n    niveau_final = 1;\n    etat_final   = 'WARNING';\n    couleur      = 'orange';\n}\nelse {\n    niveau_final = 0;\n    etat_final   = 'NORMAL';\n    couleur      = 'vert';\n}\n\nvar commande = {\n    niveau:   niveau_final,\n    etat:     etat_final,\n    couleur:  couleur,\n    buzzer:   niveau_final >= 3,\n    source:   'camera:' + cam + ' | mpu:' + mpu,\n    perclos:  global.get('cam_perclos') || 0,\n    tilt:     global.get('mpu_tilt') || 0,\n    timestamp: new Date().toLocaleTimeString()\n};\n\nmsg.payload = commande;\nmsg.topic   = 'vigidrive/commande';\nreturn msg;",
+        "outputs": 1,
+        "x": 420,
+        "y": 160,
+        "wires": [
+            [
+                "2e545f041da01b51",
+                "1489f3d4c920d7d6",
+                "fd6014fc308c7f0b",
+                "0ee30c77c958fc67"
+            ]
+        ]
+    },
+    {
+        "id": "2e545f041da01b51",
+        "type": "mqtt out",
+        "z": "30953abc540a456a",
+        "name": "→ ESP32",
+        "topic": "vigidrive/commande",
+        "qos": "1",
+        "retain": false,
+        "broker": "broker-local",
+        "x": 660,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "1489f3d4c920d7d6",
+        "type": "debug",
+        "z": "30953abc540a456a",
+        "name": "Debug",
+        "active": true,
+        "tosidebar": true,
+        "x": 1130,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "fd6014fc308c7f0b",
+        "type": "function",
+        "z": "30953abc540a456a",
+        "name": "→ ThingsBoard format",
+        "func": "var d = msg.payload;\nmsg.payload = JSON.stringify({\n    fusion_niveau: d.niveau,\n    fusion_etat: d.etat,\n    fusion_buzzer: d.buzzer ? 1 : 0,\n    fusion_perclos: d.perclos,\n    fusion_tilt: d.tilt\n});\nmsg.topic = 'v1/devices/me/telemetry';\nreturn msg;",
+        "outputs": 1,
+        "x": 680,
+        "y": 320,
+        "wires": [
+            [
+                "dc090f7a147dc3e3"
+            ]
+        ]
+    },
+    {
+        "id": "dc090f7a147dc3e3",
+        "type": "mqtt out",
+        "z": "30953abc540a456a",
+        "name": "→ ThingsBoard",
+        "topic": "v1/devices/me/telemetry",
+        "qos": "1",
+        "retain": false,
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "1863d77fd5464746",
+        "x": 940,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "0ee30c77c958fc67",
+        "type": "function",
+        "z": "30953abc540a456a",
+        "name": "→ Format INSERT",
+        "func": "var d = msg.payload;\nfunction esc(s){ return String(s).replace(/'/g, \"''\"); }\nvar sql = \"INSERT INTO historique (ts, niveau, etat, buzzer, perclos, tilt) VALUES (\" +\n    \"datetime('now','localtime'), \" +\n    (Number(d.niveau)||0) + \", \" +\n    \"'\" + esc(d.etat||'') + \"', \" +\n    (d.buzzer ? 1 : 0) + \", \" +\n    (Number(d.perclos)||0) + \", \" +\n    (Number(d.tilt)||0) + \")\";\nmsg.topic = sql;\nreturn msg;",
+        "outputs": 1,
+        "x": 670,
+        "y": 420,
+        "wires": [
+            [
+                "ac9091e5d65478ce"
+            ]
+        ]
+    },
+    {
+        "id": "ac9091e5d65478ce",
+        "type": "sqlite",
+        "z": "30953abc540a456a",
+        "mydb": "d65257dea59b97b5",
+        "sqlquery": "msg.topic",
+        "sql": "",
+        "name": "SQLite historique",
+        "x": 910,
+        "y": 420,
+        "wires": [
+            [
+                "1489f3d4c920d7d6"
+            ]
+        ]
+    },
+    {
+        "id": "ce1f700b04ab0e7b",
+        "type": "inject",
+        "z": "30953abc540a456a",
+        "name": "Init table (au démarrage)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "2",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 410,
+        "y": 500,
+        "wires": [
+            [
+                "7ea76a92a17a4a6e"
+            ]
+        ]
+    },
+    {
+        "id": "7ea76a92a17a4a6e",
+        "type": "function",
+        "z": "30953abc540a456a",
+        "name": "CREATE TABLE",
+        "func": "msg.topic = \"CREATE TABLE IF NOT EXISTS historique (\" +\n    \"id INTEGER PRIMARY KEY AUTOINCREMENT, \" +\n    \"ts TEXT, \" +\n    \"niveau INTEGER, \" +\n    \"etat TEXT, \" +\n    \"buzzer INTEGER, \" +\n    \"perclos REAL, \" +\n    \"tilt REAL)\";\nreturn msg;",
+        "outputs": 1,
+        "x": 670,
+        "y": 500,
+        "wires": [
+            [
+                "ac9091e5d65478ce"
+            ]
+        ]
+    },
+    {
+        "id": "broker-local",
+        "type": "mqtt-broker",
+        "name": "Mosquitto Pi",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "nr-dash",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "1863d77fd5464746",
+        "type": "mqtt-broker",
+        "name": "ThingsBoard",
+        "broker": "mqtt.thingsboard.cloud",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "d65257dea59b97b5",
+        "type": "sqlitedb",
+        "db": "/home/pi/vigidrive/vigidrive.db",
+        "mode": "RWC"
+    },
+    {
+        "id": "86f0cfc88ee23e39",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-node-sqlite": "2.0.1"
+        }
+    }
+]
